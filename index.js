@@ -13,10 +13,8 @@ const OWNER_ROLES = ['1536796640399200447', '1539678217311617195'];
 const SUPPORT_ROLE_ID = '1536796640399200447';
 const TICKET_CHANNEL_ID = '1552755184814530600';
 
-// نظام الـ AFK (تخزين الأعضاء)
 const afkUsers = new Map();
-// نظام الستريك (Streak)
-const streaks = new Map(); // { userId: { count: number, lastDate: string } }
+const streaks = new Map();
 
 client.once('ready', async () => {
   console.log(`🚀 تم تشغيل البوت بنجاح: ${client.user.tag}`);
@@ -53,12 +51,10 @@ client.once('ready', async () => {
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
-  // 1. رد تلقائي على السلام عليكم
   if (message.content.trim() === 'السلام عليكم') {
     return message.reply('وعليكم السلام منور').catch(() => {});
   }
 
-  // 2. فحص نظام الـ AFK (إذا تم منشن شخص مفعل afk)
   if (message.mentions.users.size > 0) {
     message.mentions.users.forEach(user => {
       if (afkUsers.has(user.id)) {
@@ -68,7 +64,6 @@ client.on('messageCreate', async message => {
     });
   }
 
-  // فحص إذا كان الكاتب نفسه في حالة AFK ويريد إزالتها
   if (afkUsers.has(message.author.id)) {
     afkUsers.delete(message.author.id);
     message.reply('👋 عوداً حميداً! تم إزالة حالة الـ AFK الخاصة بك.').then(msg => {
@@ -76,12 +71,10 @@ client.on('messageCreate', async message => {
     }).catch(() => {});
   }
 
-  // 3. نظام الستريك اليومي (Streak)
   const todayStr = new Date().toDateString();
   let userStreak = streaks.get(message.author.id) || { count: 0, lastDate: '' };
   
   if (userStreak.lastDate !== todayStr) {
-    // التحقق هل أرسل أمس لتحديث الستريك أو إرجاعه لـ 1
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     
@@ -99,9 +92,14 @@ client.on('messageCreate', async message => {
   const args = message.content.slice(1).trim().split(/ +/);
   const command = args.shift().toLowerCase();
   const sendError = (text) => message.reply(`❌ **خطأ:** ${text}`).catch(() => {});
-  const isOwner = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(role => OWNER_ROLES.includes(role.id));
+  
+  let isOwner = false;
+  try {
+    isOwner = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(role => OWNER_ROLES.includes(role.id));
+  } catch (e) {
+    isOwner = false;
+  }
 
-  // --- أمر المساعدة (Help) مع نظام الصفحات والأزرار ---
   if (command === 'help' || command === 'اوامر') {
     const page1 = new EmbedBuilder()
       .setTitle('📜 قائمة أوامر البوت (الصفحة 1/2)')
@@ -116,7 +114,7 @@ client.on('messageCreate', async message => {
         { name: '`+شيل`', value: '**إزالة رتبة من عضو محدد**' },
         { name: '`+العاب`', value: '**لألعاب عشوائية ممتعة**' },
         { name: '`+afk`', value: '**لتفعيل وضع الانشغال والابتعاد**' },
-        { name: '`+ستريك`', value: **عرض عدد أيام الستريك المتتالية الخاص بك (`🔥${userStreak.count}`)** },
+        { name: '`+ستريك`', value: `**عرض عدد أيام الستريك المتتالية الخاص بك (🔥${userStreak.count})**` },
         { name: '`+استدعاء`', value: '**استدعاء عضو مع منشن والسبب**' }
       );
 
@@ -141,33 +139,31 @@ client.on('messageCreate', async message => {
       new ButtonBuilder().setCustomId('next_page').setLabel('التالي').setStyle(ButtonStyle.Secondary)
     );
 
-    const sentMsg = await message.reply({ embeds: [page1], components: [row] });
+    const sentMsg = await message.reply({ embeds: [page1], components: [row] }).catch(() => {});
+    if (!sentMsg) return;
+
     const collector = sentMsg.createMessageComponentCollector({ time: 60000 });
 
-    let currentPage = 1;
     collector.on('collect', async i => {
-      if (i.user.id !== message.author.id) return i.reply({ content: '❌ هذه الأوامر ليست لك!', ephemeral: true });
+      if (i.user.id !== message.author.id) return i.reply({ content: '❌ هذه الأوامر ليست لك!', ephemeral: true }).catch(() => {});
 
       if (i.customId === 'next_page') {
-        currentPage = 2;
         const newRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('prev_page').setLabel('السابق').setStyle(ButtonStyle.Secondary).setDisabled(false),
           new ButtonBuilder().setCustomId('next_page').setLabel('التالي').setStyle(ButtonStyle.Secondary).setDisabled(true)
         );
-        await i.update({ embeds: [page2], components: [newRow] });
+        await i.update({ embeds: [page2], components: [newRow] }).catch(() => {});
       } else if (i.customId === 'prev_page') {
-        currentPage = 1;
         const newRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('prev_page').setLabel('السابق').setStyle(ButtonStyle.Secondary).setDisabled(true),
           new ButtonBuilder().setCustomId('next_page').setLabel('التالي').setStyle(ButtonStyle.Secondary).setDisabled(false)
         );
-        await i.update({ embeds: [page1], components: [newRow] });
+        await i.update({ embeds: [page1], components: [newRow] }).catch(() => {});
       }
     });
     return;
   }
 
-  // --- أمر الباند ---
   if (command === 'باند') {
     if (!isOwner && !message.member.permissions.has(PermissionFlagsBits.BanMembers)) return sendError('ليس لديك صلاحية لاستخدام هذا الأمر!');
     const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
@@ -181,7 +177,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- أمر الـ Kick ---
   if (command === 'kick') {
     if (!isOwner && !message.member.permissions.has(PermissionFlagsBits.KickMembers)) return sendError('ليس لديك صلاحية لاستخدام هذا الأمر!');
     const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
@@ -195,7 +190,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- أمر إخفاء الروم ---
   if (command === 'اخفاء') {
     if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
     try {
@@ -206,7 +200,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- أمر ظهور الروم ---
   if (command === 'ظهور' || command === 'اظهار') {
     if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
     try {
@@ -217,7 +210,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- أمر إعطاء الرول ---
   if (command === 'رول') {
     if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
     const targetMember = message.mentions.members.first();
@@ -233,7 +225,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- أمر شيل الرول ---
   if (command === 'شيل') {
     if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
     const targetMember = message.mentions.members.first();
@@ -249,7 +240,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- أمر ألعاب عشوائية ---
   if (command === 'العاب' || command === 'لعبة') {
     const games = [
       '🎮 لعبة صراحة: لو خيروك بين العيش بدون إنترنت أو بدون أصدقاء، ماذا تختار؟',
@@ -259,24 +249,21 @@ client.on('messageCreate', async message => {
       '🎮 لعبة عشوائية: من هو الشخص الأكثر نشاطاً في سيرفرنا اليوم برأيك؟'
     ];
     const randomGame = games[Math.floor(Math.random() * games.length)];
-    return message.reply(randomGame);
+    return message.reply(randomGame).catch(() => {});
   }
 
-  // --- أمر AFK ---
   if (command === 'afk') {
     const reason = args.join(' ') || 'بدون سبب مشخص';
     afkUsers.set(message.author.id, { reason });
-    return message.reply(`💤 **تم تفعيل وضع الـ AFK بنجاح!**\n📝 السبب: **${reason}**\n*(سيتم الرد تلقائياً على كل من يمنشنك)*`).then(msg => {
+    return message.reply(`💤 **تم تفعيل وضع الـ AFK بنجاح!**\n📝 السبب: **${reason}**`).then(msg => {
       setTimeout(() => msg.delete().catch(() => {}), 5000);
-    });
+    }).catch(() => {});
   }
 
-  // --- أمر الستريك (Streak) ---
   if (command === 'ستريك') {
-    return message.reply(`🔥 **لديك ستريك متواصل بعدد:** \`${userStreak.count}\` **يوم! حافظ على استمرارك.**`);
+    return message.reply(`🔥 **لديك ستريك متواصل بعدد:** \`${userStreak.count}\` **يوم! حافظ على استمرارك.**`).catch(() => {});
   }
 
-  // --- أمر الاستدعاء ---
   if (command === 'استدعاء') {
     const target = message.mentions.members.first();
     if (!target) return sendError('اكتب: `+استدعاء @العضو [السبب]`');
@@ -289,7 +276,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- أمر مسح الرسائل (+مسح أو مسح) ---
   if (command === 'مسح') {
     if (!isOwner && !message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return sendError('ليس لديك صلاحية مسح الرسائل!');
     const count = parseInt(args[0]) || 10;
@@ -303,19 +289,16 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- أمر الجيفواي العادي (بدون سلاش، تنمسح رسالة البوت وتبقى الجيفواي) ---
   if (command === 'جيفوايات' || command === 'جيفواي') {
     if (!isOwner) return sendError('هذا الأمر مخصص للإدارة والأونرية فقط!');
     
-    // الصيغة: +جيفوايات الوقت(بالدقائق) الجائزة
     const timeMinutes = parseInt(args[0]);
     const prize = args.slice(1).join(' ');
     
-    // حذف رسالة الأمر الأصلية فوراً
     await message.delete().catch(() => {});
     
     if (isNaN(timeMinutes) || timeMinutes <= 0 || !prize) {
-      return message.channel.send('❌ **خطأ في الصيغة!** اكتب هكذا: `+جيفوايات 5 1000 روبكس`').then(m => setTimeout(() => m.delete().catch(() => {}), 5000));
+      return message.channel.send('❌ **خطأ في الصيغة!** اكتب هكذا: `+جيفوايات 5 1000 روبكس`').then(m => setTimeout(() => m.delete().catch(() => {}), 5000)).catch(() => {});
     }
 
     const embed = new EmbedBuilder()
@@ -328,14 +311,16 @@ client.on('messageCreate', async message => {
       new ButtonBuilder().setCustomId('join_gw').setLabel('🎉 اشترك بالسحب').setStyle(ButtonStyle.Success)
     );
 
-    const giveawayMsg = await message.channel.send({ embeds: [embed], components: [row] });
+    const giveawayMsg = await message.channel.send({ embeds: [embed], components: [row] }).catch(() => {});
+    if (!giveawayMsg) return;
+
     const entrants = new Set();
     const collector = giveawayMsg.createMessageComponentCollector({ time: timeMinutes * 60 * 1000 });
 
     collector.on('collect', async i => {
-      if (entrants.has(i.user.id)) return i.reply({ content: '⚠️ أنت مشارك مسبقاً في هذه المسابقة!', ephemeral: true });
+      if (entrants.has(i.user.id)) return i.reply({ content: '⚠️ أنت مشارك مسبقاً في هذه المسابقة!', ephemeral: true }).catch(() => {});
       entrants.add(i.user.id);
-      await i.reply({ content: '✅ **تم تسجيل اسمك بنجاح في السحب!**', ephemeral: true });
+      await i.reply({ content: '✅ **تم تسجيل اسمك بنجاح في السحب!**', ephemeral: true }).catch(() => {});
     });
 
     collector.on('end', async () => {
@@ -355,7 +340,6 @@ client.on('messageCreate', async message => {
     });
   }
 
-  // --- أمر الامبيد (+امبيد) ---
   if (command === 'امبيد') {
     if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
     const contentText = args.join(' ');
@@ -367,24 +351,22 @@ client.on('messageCreate', async message => {
       .setColor(0x3498DB)
       .setTimestamp();
 
-    return message.channel.send({ embeds: [customEmbed] });
+    return message.channel.send({ embeds: [customEmbed] }).catch(() => {});
   }
 
-  // --- أمر Say (يكرر البوت كلامك وتمسح رسالتك) ---
   if (command === 'say') {
     if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
     const sayText = args.join(' ');
     if (!sayText) return sendError('اكتب النص الذي تريد من البوت قوله.');
     
     await message.delete().catch(() => {});
-    return message.channel.send(sayText);
+    return message.channel.send(sayText).catch(() => {});
   }
 
-  // --- أمر التايم آوت (+تايم) ---
   if (command === 'تايم' || command === 'timeout') {
     if (!isOwner && !message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) return sendError('ليس لديك صلاحية لإعطاء تايم آوت!');
     const target = message.mentions.members.first();
-    const timeArg = args[1]; // مثل 1d, 2h, 30m
+    const timeArg = args[1];
     if (!target || !timeArg) return sendError('اكتب هكذا: `+تايم @العضو 1h [السبب]`');
 
     let duration = 0;
@@ -394,7 +376,7 @@ client.on('messageCreate', async message => {
     if (unit === 'd') duration = value * 24 * 60 * 60 * 1000;
     else if (unit === 'h') duration = value * 60 * 60 * 1000;
     else if (unit === 'm') duration = value * 60 * 1000;
-    else return sendError('وحدة الوقت خطأ! استخدم: `d` (يوم) أو `h` (ساعة) أو `m` (دقيقة). مثال: `1h`');
+    else return sendError('وحدة الوقت خطأ! استخدم: `d` أو `h` أو `m`.');
 
     const reason = args.slice(2).join(' ') || 'بدون سبب';
     try {
@@ -405,7 +387,6 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- أمر فك التايم (+انتايم) ---
   if (command === 'انتايم' || command === 'untimeout') {
     if (!isOwner && !message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) return sendError('ليس لديك صلاحية لفك التايم!');
     const target = message.mentions.members.first();
@@ -418,14 +399,13 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // --- أمر رول جماعي (+رول-جماعي) ---
   if (command === 'رول-جماعي' || command === 'اعطاء-رول-للكل') {
     if (!isOwner) return sendError('هذا الأمر مخصص لأونر السيرفر فقط!');
     const roleArg = args.join(' ').replace(/[<@&>]/g, '');
     const role = message.guild.roles.cache.get(roleArg) || message.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleArg.toLowerCase()));
     if (!role) return sendError('اكتب اسم الرول أو الآيدي بشكل صحيح: `+رول-جماعي اسم_الرول`');
 
-    await message.reply('⏳ **جاري إعطاء الرول لجميع أعضاء السيرفر، قد يستغرق ذلك بعض الوقت...**');
+    await message.reply('⏳ **جاري إعطاء الرول لجميع أعضاء السيرفر...**').catch(() => {});
     
     try {
       await message.guild.members.fetch();
@@ -436,13 +416,12 @@ client.on('messageCreate', async message => {
           count++;
         }
       });
-      await message.channel.send(`✅ **تم الانتهاء! تمت إضافة الرول (${role.name}) لـ (${count}) عضو بنجاح.**`);
+      await message.channel.send(`✅ **تم الانتهاء! تمت إضافة الرول (${role.name}) لـ (${count}) عضو بنجاح.**`).catch(() => {});
     } catch (e) {
       sendError('حدث خطأ أثناء إعطاء الرولات للكل.');
     }
   }
 
-  // --- أوامر التكت (+close و +delete) ---
   if (command === 'close') {
     const isSupport = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
     if (!isSupport) return message.reply('❌ **هذا الأمر مخصص للدعم الفني والأونرية فقط!**').catch(() => {});
@@ -466,16 +445,17 @@ client.on('messageCreate', async message => {
   }
 });
 
-// نظام الأزرار الخاص بالتذاكر والـ Help
 client.on('interactionCreate', async interaction => {
   if (interaction.isButton()) {
     if (interaction.customId === 'create_ticket') {
       const guild = interaction.guild;
       const member = interaction.member;
+      if (!guild || !member) return;
 
-      const existingChannel = guild.channels.cache.find(c => c.name === `ticket-${member.user.username.toLowerCase().replace(/[^a-z0-9]/g, '')}`);
+      const cleanUsername = member.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const existingChannel = guild.channels.cache.find(c => c.name === `ticket-${cleanUsername}`);
       if (existingChannel) {
-        return interaction.reply({ content: `❌ لديك تكت مفتوحة مسبقاً: ${existingChannel}`, ephemeral: true });
+        return interaction.reply({ content: `❌ لديك تكت مفتوحة مسبقاً: ${existingChannel}`, ephemeral: true }).catch(() => {});
       }
 
       try {
@@ -502,10 +482,10 @@ client.on('interactionCreate', async interaction => {
           new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق وحذف التكت').setStyle(ButtonStyle.Danger).setEmoji('🔒')
         );
 
-        await ticketChannel.send({ content: `${member} | <@&${SUPPORT_ROLE_ID}>`, embeds: [ticketEmbed], components: [ticketRow] });
-        await interaction.reply({ content: `✅ تم إنشاء تكت الخاص بك بنجاح: ${ticketChannel}`, ephemeral: true });
+        await ticketChannel.send({ content: `${member} | <@&${SUPPORT_ROLE_ID}>`, embeds: [ticketEmbed], components: [ticketRow] }).catch(() => {});
+        await interaction.reply({ content: `✅ تم إنشاء تكت الخاص بك بنجاح: ${ticketChannel}`, ephemeral: true }).catch(() => {});
       } catch (e) {
-        await interaction.reply({ content: '❌ حدث خطأ أثناء إنشاء التكت.', ephemeral: true });
+        await interaction.reply({ content: '❌ حدث خطأ أثناء إنشاء التكت.', ephemeral: true }).catch(() => {});
       }
     }
 
@@ -529,17 +509,21 @@ client.on('interactionCreate', async interaction => {
         .setRequired(true);
 
       modal.addComponents(new ActionRowBuilder().addComponents(methodInput), new ActionRowBuilder().addComponents(detailsInput));
-      await interaction.showModal(modal);
+      await interaction.showModal(modal).catch(() => {});
     }
 
     if (interaction.customId === 'claim_ticket') {
-      const isSupport = interaction.member.permissions.has(PermissionFlagsBits.Administrator) || interaction.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
-      if (!isSupport) return interaction.reply({ content: '❌ هذا الزر مخصص للدعم الفني فقط!', ephemeral: true });
+      let isSupport = false;
+      try {
+        isSupport = interaction.member.permissions.has(PermissionFlagsBits.Administrator) || interaction.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
+      } catch (e) {
+        isSupport = false;
+      }
+      if (!isSupport) return interaction.reply({ content: '❌ هذا الزر مخصص للدعم الفني فقط!', ephemeral: true }).catch(() => {});
 
-      // منع صاحب التكت من استلام التكت الخاصة به
       const ticketCreator = interaction.channel.name.replace('ticket-', '');
       if (interaction.user.username.toLowerCase() === ticketCreator.toLowerCase()) {
-        return interaction.reply({ content: '❌ لا يمكنك استلام التكت الخاصة بك!', ephemeral: true });
+        return interaction.reply({ content: '❌ لا يمكنك استلام التكت الخاصة بك!', ephemeral: true }).catch(() => {});
       }
 
       const embed = EmbedBuilder.from(interaction.message.embeds[0]).addFields({ name: 'تم الاستلام بواسطة', value: `${interaction.user}`, inline: false });
@@ -549,20 +533,25 @@ client.on('interactionCreate', async interaction => {
         new ButtonBuilder().setCustomId('close_ticket').setLabel('إغلاق وحذف التكت').setStyle(ButtonStyle.Danger).setEmoji('🔒')
       );
 
-      await interaction.update({ embeds: [embed], components: [disabledRow] });
-      await interaction.channel.send(`✅ تم استلام التكت بواسطة الدعم الفني: ${interaction.user}`);
+      await interaction.update({ embeds: [embed], components: [disabledRow] }).catch(() => {});
+      await interaction.channel.send(`✅ تم استلام التكت بواسطة الدعم الفني: ${interaction.user}`).catch(() => {});
     }
 
     if (interaction.customId === 'close_ticket') {
-      const isSupport = interaction.member.permissions.has(PermissionFlagsBits.Administrator) || interaction.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
+      let isSupport = false;
+      try {
+        isSupport = interaction.member.permissions.has(PermissionFlagsBits.Administrator) || interaction.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
+      } catch (e) {
+        isSupport = false;
+      }
       const ticketCreator = interaction.channel.name.replace('ticket-', '');
       const isCreator = interaction.user.username.toLowerCase() === ticketCreator.toLowerCase();
 
       if (!isSupport && !isCreator) {
-        return interaction.reply({ content: '❌ ليس لديك صلاحية لإغلاق هذا التكت!', ephemeral: true });
+        return interaction.reply({ content: '❌ ليس لديك صلاحية لإغلاق هذا التكت!', ephemeral: true }).catch(() => {});
       }
 
-      await interaction.reply('🔒 جاري حذف التكت وإغلاقه خلال ثوانٍ...');
+      await interaction.reply('🔒 جاري حذف التكت وإغلاقه خلال ثوانٍ...').catch(() => {});
       setTimeout(() => {
         interaction.channel.delete().catch(() => {});
       }, 3000);
@@ -582,8 +571,8 @@ client.on('interactionCreate', async interaction => {
         .setColor(0xE67E22)
         .setTimestamp();
 
-      await interaction.channel.send({ embeds: [orderEmbed] });
-      await interaction.reply({ content: '✅ تم إرسال تفاصيل الدفع والطلب بنجاح!', ephemeral: true });
+      await interaction.channel.send({ embeds: [orderEmbed] }).catch(() => {});
+      await interaction.reply({ content: '✅ تم إرسال تفاصيل الدفع والطلب بنجاح!', ephemeral: true }).catch(() => {});
     }
   }
 });
