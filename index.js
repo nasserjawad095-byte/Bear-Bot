@@ -9,6 +9,9 @@ const client = new Client({
   ]
 });
 
+// أيدي الرتب المخصصة للأونرية
+const OWNER_ROLES = ['1536796640399200447', '1539678217311617195'];
+
 client.once('ready', () => {
   console.log(`🚀 تم تشغيل البوت بنجاح: ${client.user.tag}`);
 });
@@ -21,8 +24,46 @@ client.on('messageCreate', async message => {
   const command = args.shift().toLowerCase();
   const sendError = (text) => message.reply(`❌ **خطأ:** ${text}`).catch(() => {});
 
+  // دالة للتحقق إذا كان المستخدم يملك رتبة الأونر أو صلاحية أدمن
+  const isOwner = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(role => OWNER_ROLES.includes(role.id));
+
+  // أمر المساعدة: +help
+  if (command === 'help' || command === 'اوامر') {
+    const helpEmbed = new EmbedBuilder()
+      .setTitle('📜 قائمة أوامر بوت السيرفر')
+      .setDescription('جميع الأوامر تبدأ بعلامة الترقيم `+` ومكتوبة بوضوح للنسخ والاستخدام الفوري.')
+      .setColor(0x3498DB)
+      .addFields(
+        {
+          name: '👤 **أوامر الأعضاء العامة:**',
+          value: 
+            '`+help` - لعرض قائمة الأوامر هذه\n' +
+            '`+بينج` - لفحص سرعة استجابة البوت'
+        },
+        {
+          name: '👑 **أوامر الأونرية والإدارة (خاصة برتب الصلاحيات):**',
+          value: 
+            '`+قفل` - لقفل الشات الحالي\n' +
+            '`+فتح` - لفتح الشات الحالي\n' +
+            '`+اخفاء` - لإخفاء الروم عن الجميع\n' +
+            '`+اظهار` - لإظهار الروم للجميع\n' +
+            '`+رول @العضو اسم_الرول` - لإعطاء رتبة لعضو\n' +
+            '`+شيل @العضو اسم_الرول` - لسحب رتبة من عضو\n' +
+            '`+تف @العضو [السبب]` - لحظر العضو (Ban)\n' +
+            '`+برا @العضو [السبب]` - لطرد العضو (Kick)\n' +
+            '`+مسح [العدد]` - لمسح الرسائل (بين 1 و 100)\n' +
+            '`+جيفواي [الدقائق] [الجائزة]` - لبدأ مسابقة جيفواي مع زر مشاركة'
+        }
+      )
+      .setTimestamp()
+      .setFooter({ text: 'نظام إدارة السيرفرات الاحترافي' });
+
+    return message.reply({ embeds: [helpEmbed] });
+  }
+
+  // 1. أمر قفل الشات: +قفل
   if (command === 'قفل') {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return sendError('ليست لديك صلاحية لإدارة القنوات!');
+    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة المحددة فقط!');
     try {
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
       await message.reply('🔒 **تم قفل الروم بنجاح.**');
@@ -31,8 +72,9 @@ client.on('messageCreate', async message => {
     }
   }
 
+  // 2. أمر فتح الشات: +فتح
   if (command === 'فتح') {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return sendError('ليست لديك صلاحية لإدارة القنوات!');
+    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة المحددة فقط!');
     try {
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
       await message.reply('🔓 **تم فتح الروم بنجاح.**');
@@ -41,8 +83,9 @@ client.on('messageCreate', async message => {
     }
   }
 
+  // 3. أمر إخفاء الروم: +اخفاء
   if (command === 'اخفاء') {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return sendError('ليست لديك صلاحية!');
+    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة المحددة فقط!');
     try {
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: false });
       await message.reply('🙈 **تم إخفاء الروم عن الجميع.**');
@@ -51,8 +94,9 @@ client.on('messageCreate', async message => {
     }
   }
 
+  // 4. أمر إظهار الروم: +اظهار
   if (command === 'اظهار') {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return sendError('ليست لديك صلاحية!');
+    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة المحددة فقط!');
     try {
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: true });
       await message.reply('🐵 **تم إظهار الروم للجميع.**');
@@ -61,13 +105,14 @@ client.on('messageCreate', async message => {
     }
   }
 
+  // 5. أمر إعطاء رول: +رول @العضو اسم_الرول
   if (command === 'رول') {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageRoles)) return sendError('ليست لديك صلاحية لإدارة الرولات!');
+    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة المحددة فقط!');
     const targetMember = message.mentions.members.first();
     const roleArg = args.slice(1).join(' ').replace(/[<@&>]/g, '');
     const role = message.guild.roles.cache.get(roleArg) || message.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleArg.toLowerCase()));
 
-    if (!targetMember || !role) return sendError('اكتب: `+رول @العضو اسم_الرول`');
+    if (!targetMember || !role) return sendError('اكتب الأمر هكذا: `+رول @العضو اسم_الرول`');
     if (message.guild.members.me.roles.highest.position <= role.position) return sendError('رتبة البوت أقل من هذه الرتبة!');
 
     try {
@@ -78,13 +123,14 @@ client.on('messageCreate', async message => {
     }
   }
 
+  // 6. أمر شيل رول: +شيل @العضو اسم_الرول
   if (command === 'شيل') {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageRoles)) return sendError('ليست لديك صلاحية لإدارة الرولات!');
+    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة المحددة فقط!');
     const targetMember = message.mentions.members.first();
     const roleArg = args.slice(1).join(' ').replace(/[<@&>]/g, '');
     const role = message.guild.roles.cache.get(roleArg) || message.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleArg.toLowerCase()));
 
-    if (!targetMember || !role) return sendError('اكتب: `+شيل @العضو اسم_الرول`');
+    if (!targetMember || !role) return sendError('اكتب الأمر هكذا: `+شيل @العضو اسم_الرول`');
     if (message.guild.members.me.roles.highest.position <= role.position) return sendError('رتبة البوت أقل من هذه الرتبة!');
 
     try {
@@ -95,10 +141,11 @@ client.on('messageCreate', async message => {
     }
   }
 
+  // 7. أمر البان (تف): +تف @العضو [السبب]
   if (command === 'تف') {
-    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) return sendError('ليس لديك صلاحية حظر الأعضاء!');
+    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة المحددة فقط!');
     const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]?.replace(/[<@!>]/g, ''));
-    if (!target) return sendError('اكتب: `+تف @العضو [السبب]`');
+    if (!target) return sendError('اكتب الأمر هكذا: `+تف @العضو [السبب]`');
     if (!target.bannable || target.roles.highest.position >= message.member.roles.highest.position) return sendError('لا يمكنني حظر هذا العضو!');
 
     const reason = args.slice(1).join(' ') || 'بدون سبب';
@@ -110,10 +157,11 @@ client.on('messageCreate', async message => {
     }
   }
 
+  // 8. أمر الكيك (برا): +برا @العضو [السبب]
   if (command === 'برا') {
-    if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) return sendError('ليس لديك صلاحية طرد الأعضاء!');
+    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة المحددة فقط!');
     const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]?.replace(/[<@!>]/g, ''));
-    if (!target) return sendError('اكتب: `+برا @العضو [السبب]`');
+    if (!target) return sendError('اكتب الأمر هكذا: `+برا @العضو [السبب]`');
     if (!target.kickable || target.roles.highest.position >= message.member.roles.highest.position) return sendError('لا يمكنني طرد هذا العضو!');
 
     const reason = args.slice(1).join(' ') || 'بدون سبب';
@@ -125,8 +173,9 @@ client.on('messageCreate', async message => {
     }
   }
 
+  // 9. أمر مسح الشات: +مسح [العدد]
   if (command === 'مسح' || command === 'كلير') {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return sendError('ليس لديك صلاحية إدارة الرسائل!');
+    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة المحددة فقط!');
     const count = parseInt(args[0]);
     if (isNaN(count) || count <= 0 || count > 100) return sendError('اكتب عدد بين 1 و 100: `+مسح 50`');
 
@@ -139,8 +188,9 @@ client.on('messageCreate', async message => {
     }
   }
 
+  // 10. أمر الجيفواي: +جيفواي [الدقائق] [الجائزة]
   if (command === 'جيفواي') {
-    if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return sendError('أمر الجيفواي مخصص للأدميرال فقط!');
+    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة المحددة فقط!');
     
     const timeMinutes = parseInt(args[0]);
     const prize = args.slice(1).join(' ');
@@ -189,6 +239,7 @@ client.on('messageCreate', async message => {
     });
   }
 
+  // 11. أمر بينج: +بينج (متاح للجميع)
   if (command === 'بينج') {
     const msg = await message.reply('🏓 جاري القياس...');
     const ping = msg.createdTimestamp - message.createdTimestamp;
