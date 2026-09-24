@@ -10,55 +10,47 @@ const client = new Client({
 });
 
 client.once('ready', () => {
-  console.log(`🚀 البوت اشتغل بنجاح وبدأ يبرمج كالسلطان: ${client.user.tag}`);
+  console.log(`🚀 تم تشغيل البوت بنجاح: ${client.user.tag}`);
 });
 
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
-
-  // البوت يبدأ دائماً بعلامة +
   if (!message.content.startsWith('+')) return;
 
   const args = message.content.slice(1).trim().split(/ +/);
   const command = args.shift().toLowerCase();
-
-  // دالة بسيطة للتحقق من الأخطاء والصلاحيات
   const sendError = (text) => message.reply(`❌ **خطأ:** ${text}`).catch(() => {});
 
-  // 1. أمر قفل الشات: +قفل
   if (command === 'قفل') {
     if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return sendError('ليست لديك صلاحية لإدارة القنوات!');
     try {
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
       await message.reply('🔒 **تم قفل الروم بنجاح.**');
     } catch (e) {
-      sendError('حدث خطأ، تأكد أن رتبة البوت أعلى وتملك صلاحيات كافية.');
+      sendError('حدث خطأ، تأكد أن رتبة البوت أعلى.');
     }
   }
 
-  // 2. أمر فتح الشات: +فتح
   if (command === 'فتح') {
     if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return sendError('ليست لديك صلاحية لإدارة القنوات!');
     try {
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
       await message.reply('🔓 **تم فتح الروم بنجاح.**');
     } catch (e) {
-      sendError('حدث خطأ في تعديل صلاحيات الروم.');
+      sendError('حدث خطأ في تعديل الصلاحيات.');
     }
   }
 
-  // 3. أمر إخفاء الروم: +اخفاء
   if (command === 'اخفاء') {
     if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return sendError('ليست لديك صلاحية!');
     try {
       await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: false });
       await message.reply('🙈 **تم إخفاء الروم عن الجميع.**');
     } catch (e) {
-      sendError('فشل إخفاء الروم، تأكد من الصلاحيات.');
+      sendError('فشل إخفاء الروم.');
     }
   }
 
-  // 4. أمر إظهار الروم: +اظهار
   if (command === 'اظهار') {
     if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return sendError('ليست لديك صلاحية!');
     try {
@@ -69,33 +61,31 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // 5. أمر إعطاء رول: +رول @العضو اسم_الرول
   if (command === 'رول') {
     if (!message.member.permissions.has(PermissionFlagsBits.ManageRoles)) return sendError('ليست لديك صلاحية لإدارة الرولات!');
     const targetMember = message.mentions.members.first();
     const roleArg = args.slice(1).join(' ').replace(/[<@&>]/g, '');
     const role = message.guild.roles.cache.get(roleArg) || message.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleArg.toLowerCase()));
 
-    if (!targetMember || !role) return sendError('الاستخدام خاطئ! اكتب: `+رول @العضو اسم_الرول`');
-    if (message.guild.members.me.roles.highest.position <= role.position) return sendError('رتبة البوت أقل أو مساوية لهذه الرتبة، لا يمكنني إعطاؤها!');
+    if (!targetMember || !role) return sendError('اكتب: `+رول @العضو اسم_الرول`');
+    if (message.guild.members.me.roles.highest.position <= role.position) return sendError('رتبة البوت أقل من هذه الرتبة!');
 
     try {
       await targetMember.roles.add(role);
-      await message.reply(`✅ تم إعطاء رول **${role.name}** للعضو ${targetMember} بنجاح.`);
+      await message.reply(`✅ تم إعطاء رول **${role.name}** للعضو ${targetMember}.`);
     } catch (e) {
       sendError('حدث خطأ أثناء إعطاء الرتبة.');
     }
   }
 
-  // 6. أمر شيل رول: +شيل @العضو اسم_الرول
   if (command === 'شيل') {
     if (!message.member.permissions.has(PermissionFlagsBits.ManageRoles)) return sendError('ليست لديك صلاحية لإدارة الرولات!');
     const targetMember = message.mentions.members.first();
     const roleArg = args.slice(1).join(' ').replace(/[<@&>]/g, '');
     const role = message.guild.roles.cache.get(roleArg) || message.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleArg.toLowerCase()));
 
-    if (!targetMember || !role) return sendError('الاستخدام خاطئ! اكتب: `+شيل @العضو اسم_الرول`');
-    if (message.guild.members.me.roles.highest.position <= role.position) return sendError('رتبة البوت أقل من هذه الرتبة، لا يمكنني سحبها!');
+    if (!targetMember || !role) return sendError('اكتب: `+شيل @العضو اسم_الرول`');
+    if (message.guild.members.me.roles.highest.position <= role.position) return sendError('رتبة البوت أقل من هذه الرتبة!');
 
     try {
       await targetMember.roles.remove(role);
@@ -105,75 +95,68 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // 7. أمر البان (تف): +تف @العضو [السبب]
   if (command === 'تف') {
-    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) return sendError('ليست لديك صلاحية حظر الأعضاء!');
+    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) return sendError('ليس لديك صلاحية حظر الأعضاء!');
     const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]?.replace(/[<@!>]/g, ''));
-    if (!target) return sendError('يرجى منشن العضو المراد حظره: `+تف @العضو [السبب]`');
-    if (!target.bannable || target.roles.highest.position >= message.member.roles.highest.position) return sendError('لا يمكنني حظر هذا العضو، رتبته أعلى منك أو مني!');
+    if (!target) return sendError('اكتب: `+تف @العضو [السبب]`');
+    if (!target.bannable || target.roles.highest.position >= message.member.roles.highest.position) return sendError('لا يمكنني حظر هذا العضو!');
 
     const reason = args.slice(1).join(' ') || 'بدون سبب';
     try {
       await target.ban({ reason });
-      await message.reply(`🔨 **تم حظر العضو ${target.user.tag} بنجاح.** (السبب: ${reason})`);
+      await message.reply(`🔨 **تم حظر العضو ${target.user.tag}.**`);
     } catch (e) {
-      sendError('حدث خطأ أثناء محاولة الحظر.');
+      sendError('حدث خطأ أثناء الحظر.');
     }
   }
 
-  // 8. أمر الكيك (برا): +برا @العضو [السبب]
   if (command === 'برا') {
-    if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) return sendError('ليست لديك صلاحية طرد الأعضاء!');
+    if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) return sendError('ليس لديك صلاحية طرد الأعضاء!');
     const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]?.replace(/[<@!>]/g, ''));
-    if (!target) return sendError('يرجى منشن العضو المراد طرده: `+برا @العضو [السبب]`');
+    if (!target) return sendError('اكتب: `+برا @العضو [السبب]`');
     if (!target.kickable || target.roles.highest.position >= message.member.roles.highest.position) return sendError('لا يمكنني طرد هذا العضو!');
 
     const reason = args.slice(1).join(' ') || 'بدون سبب';
     try {
       await target.kick(reason);
-      await message.reply(`👢 **تم طرد العضو ${target.user.tag} من السيرفر.**`);
+      await message.reply(`👢 **تم طرد العضو ${target.user.tag}.**`);
     } catch (e) {
-      sendError('حدث خطأ أثناء محاولة الطرد.');
+      sendError('حدث خطأ أثناء الطرد.');
     }
   }
 
-  // 9. أمر مسح الشات: +مسح [العدد]
   if (command === 'مسح' || command === 'كلير') {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return sendError('ليست لديك صلاحية إدارة الرسائل!');
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return sendError('ليس لديك صلاحية إدارة الرسائل!');
     const count = parseInt(args[0]);
-    if (isNaN(count) || count <= 0 || count > 100) return sendError('يرجى تحديد عدد صحيح بين 1 و 100: `+مسح 50`');
+    if (isNaN(count) || count <= 0 || count > 100) return sendError('اكتب عدد بين 1 و 100: `+مسح 50`');
 
     try {
       await message.channel.bulkDelete(count + 1, true);
-      const tempMsg = await message.channel.send(`🧹 تم مسح \`${count}\` رسالة بنجاح.`);
+      const tempMsg = await message.channel.send(`🧹 تم مسح \`${count}\` رسالة.`);
       setTimeout(() => tempMsg.delete().catch(() => {}), 3000);
     } catch (e) {
       sendError('لا يمكنني مسح الرسائل الأقدم من 14 يوماً.');
     }
   }
 
-  // 10. أمر الجيفواي: +جيفواي [الدقائق] [الجائزة] (يمسح رسالتك تلقائياً)
   if (command === 'جيفواي') {
     if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return sendError('أمر الجيفواي مخصص للأدميرال فقط!');
     
     const timeMinutes = parseInt(args[0]);
     const prize = args.slice(1).join(' ');
-
-    // مسح رسالة الكاتب فوراً كي يبقى الجيفواي نظيفاً في الروم
     await message.delete().catch(() => {});
 
     if (isNaN(timeMinutes) || timeMinutes <= 0 || !prize) {
-      return message.channel.send('❌ **خطأ في الاستخدام:** اكتب هكذا: `+جيفواي 5 1000 روبكس` (الرقم بالدقائق ثم الجائزة).');
+      return message.channel.send('❌ اكتب هكذا: `+جيفواي 5 1000 روبكس`');
     }
 
     const embed = new EmbedBuilder()
-      .setTitle('🎉 مسابقة جيفواي جديدة (Giveaway)!')
-      .setDescription(`🎁 الجائزة الكبرى: **${prize}**\n⏱️ الوقت الباقي: **${timeMinutes} دقائق**\n\nاضغط على الزر أدناه للمشاركة فوراً! 👇`)
-      .setColor(0xF1C40F)
-      .setTimestamp();
+      .setTitle('🎉 مسابقة جيفواي جديدة')
+      .setDescription(`🎁 الجائزة: **${prize}**\n⏱️ الوقت: **${timeMinutes} دقائق**\n\nاضغط الزر للمشاركة!`)
+      .setColor(0xF1C40F);
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('join_gw').setLabel('🎉 اشترك بالمسابقة').setStyle(ButtonStyle.Success)
+      new ButtonBuilder().setCustomId('join_gw').setLabel('🎉 اشترك').setStyle(ButtonStyle.Success)
     );
 
     const giveawayMsg = await message.channel.send({ embeds: [embed], components: [row] });
@@ -182,9 +165,9 @@ client.on('messageCreate', async message => {
     const collector = giveawayMsg.createMessageComponentCollector({ time: timeMinutes * 60 * 1000 });
     
     collector.on('collect', async i => {
-      if (entrants.has(i.user.id)) return i.reply({ content: '⚠️ أنت مشارك مسبقاً في هذه المسابقة!', ephemeral: true });
+      if (entrants.has(i.user.id)) return i.reply({ content: '⚠️ أنت مشارك مسبقاً!', ephemeral: true });
       entrants.add(i.user.id);
-      await i.reply({ content: '✅ تم تسجيل اسمك بنجاح في السحب!', ephemeral: true });
+      await i.reply({ content: '✅ تم تسجيل اسمك بالسحب!', ephemeral: true });
     });
 
     collector.on('end', async () => {
@@ -198,22 +181,19 @@ client.on('messageCreate', async message => {
 
       const endEmbed = new EmbedBuilder()
         .setTitle('🎊 انتهت المسابقة وتحدد الفائز!')
-        .setDescription(`🎁 الجائزة: **${prize}**\n👑 الفائز الحظيظ: ${winner ? winner : '<@' + winnerId + '>'}\n\nمبروك ألف مبروك تواصل مع الإدارة لاستلام جائزتك! 🎉`)
-        .setColor(0x2ECC71)
-        .setTimestamp();
+        .setDescription(`🎁 الجائزة: **${prize}**\n👑 الفائز: ${winner ? winner : '<@' + winnerId + '>'}`)
+        .setColor(0x2ECC71);
 
       await giveawayMsg.edit({ embeds: [endEmbed], components: [] }).catch(() => {});
-      await message.channel.send(`🎉 مبروك لـ ${winner ? winner : '<@' + winnerId + '>'} فزت معنا بـ **${prize}**!`).catch(() => {});
+      await message.channel.send(`🎉 مبروك لـ ${winner ? winner : '<@' + winnerId + '>'} فزت بـ **${prize}**!`).catch(() => {});
     });
   }
 
-  // 11. أمر بينج: +بينج
   if (command === 'بينج') {
-    const msg = await message.reply('🏓 جاري قياس البينج...');
+    const msg = await message.reply('🏓 جاري القياس...');
     const ping = msg.createdTimestamp - message.createdTimestamp;
-    await msg.edit(`🏓 **البينج الحالي:** \`${ping}ms\` ⚡ (سرعة استجابة السيرفر ممتازة).`);
+    await msg.edit(`🏓 **البينج:** \`${ping}ms\` ⚡`);
   }
 });
 
-// تشغيل البوت
 client.login(process.env.DISCORD_TOKEN);
