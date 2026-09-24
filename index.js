@@ -10,8 +10,13 @@ const client = new Client({
 });
 
 const OWNER_ROLES = ['1536796640399200447', '1539678217311617195'];
-const TICKET_CHANNEL_ID = '1552755184814530600';
 const SUPPORT_ROLE_ID = '1536796640399200447';
+const TICKET_CHANNEL_ID = '1552755184814530600';
+
+// نظام الـ AFK (تخزين الأعضاء)
+const afkUsers = new Map();
+// نظام الستريك (Streak)
+const streaks = new Map(); // { userId: { count: number, lastDate: string } }
 
 client.once('ready', async () => {
   console.log(`🚀 تم تشغيل البوت بنجاح: ${client.user.tag}`);
@@ -48,26 +53,45 @@ client.once('ready', async () => {
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
 
-  if (message.content.startsWith('+close')) {
-    const isSupport = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
-    if (!isSupport) return message.reply('❌ هذا الأمر مخصص للدعم الفني والأونرية فقط!').catch(() => {});
-    
-    await message.channel.send('🔒 جاري إغلاق التكت...').catch(() => {});
-    setTimeout(() => {
-      message.channel.delete().catch(() => {});
-    }, 2000);
-    return;
+  // 1. رد تلقائي على السلام عليكم
+  if (message.content.trim() === 'السلام عليكم') {
+    return message.reply('وعليكم السلام منور').catch(() => {});
   }
 
-  if (message.content.startsWith('+delete')) {
-    const isSupport = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
-    if (!isSupport) return message.reply('❌ هذا الأمر مخصص للدعم الفني والأونرية فقط!').catch(() => {});
+  // 2. فحص نظام الـ AFK (إذا تم منشن شخص مفعل afk)
+  if (message.mentions.users.size > 0) {
+    message.mentions.users.forEach(user => {
+      if (afkUsers.has(user.id)) {
+        const data = afkUsers.get(user.id);
+        message.reply(`💤 العضو **${user.username}** في وضع الـ AFK حالياً.\n📝 السبب: **${data.reason}**`).catch(() => {});
+      }
+    });
+  }
 
-    await message.channel.send('🗑️ جاري حذف التكت نهائياً...').catch(() => {});
-    setTimeout(() => {
-      message.channel.delete().catch(() => {});
-    }, 2000);
-    return;
+  // فحص إذا كان الكاتب نفسه في حالة AFK ويريد إزالتها
+  if (afkUsers.has(message.author.id)) {
+    afkUsers.delete(message.author.id);
+    message.reply('👋 عوداً حميداً! تم إزالة حالة الـ AFK الخاصة بك.').then(msg => {
+      setTimeout(() => msg.delete().catch(() => {}), 4000);
+    }).catch(() => {});
+  }
+
+  // 3. نظام الستريك اليومي (Streak)
+  const todayStr = new Date().toDateString();
+  let userStreak = streaks.get(message.author.id) || { count: 0, lastDate: '' };
+  
+  if (userStreak.lastDate !== todayStr) {
+    // التحقق هل أرسل أمس لتحديث الستريك أو إرجاعه لـ 1
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (userStreak.lastDate === yesterday.toDateString()) {
+      userStreak.count += 1;
+    } else {
+      userStreak.count = 1;
+    }
+    userStreak.lastDate = todayStr;
+    streaks.set(message.author.id, userStreak);
   }
 
   if (!message.content.startsWith('+')) return;
@@ -77,153 +101,231 @@ client.on('messageCreate', async message => {
   const sendError = (text) => message.reply(`❌ **خطأ:** ${text}`).catch(() => {});
   const isOwner = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(role => OWNER_ROLES.includes(role.id));
 
+  // --- أمر المساعدة (Help) مع نظام الصفحات والأزرار ---
   if (command === 'help' || command === 'اوامر') {
-    const helpEmbed = new EmbedBuilder()
-      .setTitle('📜 قائمة أوامر بوت السيرفر')
-      .setDescription('جميع الأوامر تبدأ بعلامة الترقيم `+` ومكتوبة بوضوح للنسخ والاستخدام الفوري.')
+    const page1 = new EmbedBuilder()
+      .setTitle('📜 قائمة أوامر البوت (الصفحة 1/2)')
+      .setDescription('جميع الأوامر تبدأ بعلامة `+`')
       .setColor(0x3498DB)
       .addFields(
-        {
-          name: '👤 **أوامر الأعضاء العامة:**',
-          value: '`+help` - لعرض قائمة الأوامر هذه\n`+بينج` - لفحص سرعة استجابة البوت'
-        },
-        {
-          name: '👑 **أوامر الأونرية والإدارة:**',
-          value: '`+قفل` - لقفل الشات\n`+فتح` - لفتح الشات\n`+اخفاء` - لإخفاء الروم\n`+اظهار` - لإظهار الروم\n`+رول @العضو اسم_الرول` - لإعطاء رتبة\n`+شيل @العضو اسم_الرول` - لسحب رتبة\n`+تف @العضو [السبب]` - حظر عضو\n`+برا @العضو [السبب]` - طرد عضو\n`+مسح [العدد]` - مسح الرسائل\n`+جيفواي [الدقائق] [الجائزة]` - مسابقة جيفواي\n`+close` - إغلاق التكت (داخل التكت)\n`+delete` - حذف التكت (داخل التكت)'
-        }
-      )
-      .setTimestamp();
+        { name: '`+باند`', value: '**لتبنيد العضو من السيرفر**' },
+        { name: '`+kick`', value: '**لطرد العضو من السيرفر**' },
+        { name: '`+اخفاء`', value: '**لإخفاء الروم عن الأعضاء**' },
+        { name: '`+ظهور`', value: '**لإظهار الروم للأعضاء**' },
+        { name: '`+رول`', value: '**إعطاء رتبة لعضو محدد**' },
+        { name: '`+شيل`', value: '**إزالة رتبة من عضو محدد**' },
+        { name: '`+العاب`', value: '**لألعاب عشوائية ممتعة**' },
+        { name: '`+afk`', value: '**لتفعيل وضع الانشغال والابتعاد**' },
+        { name: '`+ستريك`', value: **عرض عدد أيام الستريك المتتالية الخاص بك (`🔥${userStreak.count}`)** },
+        { name: '`+استدعاء`', value: '**استدعاء عضو مع منشن والسبب**' }
+      );
 
-    return message.reply({ embeds: [helpEmbed] });
+    const page2 = new EmbedBuilder()
+      .setTitle('📜 قائمة أوامر البوت (الصفحة 2/2)')
+      .setDescription('جميع الأوامر تبدأ بعلامة `+`')
+      .setColor(0x3498DB)
+      .addFields(
+        { name: '`+مسح` أو `+مسح [العدد]`', value: '**لمسح وحذف الرسائل**' },
+        { name: '`+جيفوايات`', value: '**لإنشاء مسابقة جيفواي عادية**' },
+        { name: '`+امبيد`', value: '**لإرسال رسالة بتصميم الامبيد**' },
+        { name: '`+say`', value: '**جعل البوت يكرر كلامك**' },
+        { name: '`+تايم`', value: '**إعطاء ميوت مؤقت (تايم آوت)**' },
+        { name: '`+انتايم`', value: '**فك التايم آوت عن العضو**' },
+        { name: '`+رول-جماعي`', value: '**إعطاء رتبة لجميع أعضاء السيرفر**' },
+        { name: '`+close`', value: '**إغلاق التكت الحالية**' },
+        { name: '`+delete`', value: '**حذف التكت الحالية**' }
+      );
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('prev_page').setLabel('السابق').setStyle(ButtonStyle.Secondary).setDisabled(true),
+      new ButtonBuilder().setCustomId('next_page').setLabel('التالي').setStyle(ButtonStyle.Secondary)
+    );
+
+    const sentMsg = await message.reply({ embeds: [page1], components: [row] });
+    const collector = sentMsg.createMessageComponentCollector({ time: 60000 });
+
+    let currentPage = 1;
+    collector.on('collect', async i => {
+      if (i.user.id !== message.author.id) return i.reply({ content: '❌ هذه الأوامر ليست لك!', ephemeral: true });
+
+      if (i.customId === 'next_page') {
+        currentPage = 2;
+        const newRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('prev_page').setLabel('السابق').setStyle(ButtonStyle.Secondary).setDisabled(false),
+          new ButtonBuilder().setCustomId('next_page').setLabel('التالي').setStyle(ButtonStyle.Secondary).setDisabled(true)
+        );
+        await i.update({ embeds: [page2], components: [newRow] });
+      } else if (i.customId === 'prev_page') {
+        currentPage = 1;
+        const newRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('prev_page').setLabel('السابق').setStyle(ButtonStyle.Secondary).setDisabled(true),
+          new ButtonBuilder().setCustomId('next_page').setLabel('التالي').setStyle(ButtonStyle.Secondary).setDisabled(false)
+        );
+        await i.update({ embeds: [page1], components: [newRow] });
+      }
+    });
+    return;
   }
 
-  if (command === 'قفل') {
-    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة فقط!');
-    try {
-      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
-      await message.reply('🔒 **تم قفل الروم بنجاح.**');
-    } catch (e) {
-      sendError('حدث خطأ.');
-    }
-  }
-
-  if (command === 'فتح') {
-    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة فقط!');
-    try {
-      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
-      await message.reply('🔓 **تم فتح الروم بنجاح.**');
-    } catch (e) {
-      sendError('حدث خطأ.');
-    }
-  }
-
-  if (command === 'اخفاء') {
-    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة فقط!');
-    try {
-      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: false });
-      await message.reply('🙈 **تم إخفاء الروم عن الجميع.**');
-    } catch (e) {
-      sendError('فشل الإخفاء.');
-    }
-  }
-
-  if (command === 'اظهار') {
-    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة فقط!');
-    try {
-      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: true });
-      await message.reply('🐵 **تم إظهار الروم للجميع.**');
-    } catch (e) {
-      sendError('فشل الإظهار.');
-    }
-  }
-
-  if (command === 'رول') {
-    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة فقط!');
-    const targetMember = message.mentions.members.first();
-    const roleArg = args.slice(1).join(' ').replace(/[<@&>]/g, '');
-    const role = message.guild.roles.cache.get(roleArg) || message.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleArg.toLowerCase()));
-    if (!targetMember || !role) return sendError('اكتب: `+رول @العضو اسم_الرول`');
-    if (message.guild.members.me.roles.highest.position <= role.position) return sendError('رتبة البوت أقل من هذه الرتبة!');
-
-    try {
-      await targetMember.roles.add(role);
-      await message.reply(`✅ تم إعطاء رول **${role.name}** للعضو ${targetMember}.`);
-    } catch (e) {
-      sendError('حدث خطأ.');
-    }
-  }
-
-  if (command === 'شيل') {
-    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة فقط!');
-    const targetMember = message.mentions.members.first();
-    const roleArg = args.slice(1).join(' ').replace(/[<@&>]/g, '');
-    const role = message.guild.roles.cache.get(roleArg) || message.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleArg.toLowerCase()));
-    if (!targetMember || !role) return sendError('اكتب: `+شيل @العضو اسم_الرول`');
-    if (message.guild.members.me.roles.highest.position <= role.position) return sendError('رتبة البوت أقل من هذه الرتبة!');
-
-    try {
-      await targetMember.roles.remove(role);
-      await message.reply(`🗑️ تم إزالة رول **${role.name}** من العضو ${targetMember}.`);
-    } catch (e) {
-      sendError('حدث خطأ.');
-    }
-  }
-
-  if (command === 'تف') {
-    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة فقط!');
-    const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]?.replace(/[<@!>]/g, ''));
-    if (!target) return sendError('اكتب: `+تف @العضو [السبب]`');
-    if (!target.bannable || target.roles.highest.position >= message.member.roles.highest.position) return sendError('لا يمكنني حظر هذا العضو!');
+  // --- أمر الباند ---
+  if (command === 'باند') {
+    if (!isOwner && !message.member.permissions.has(PermissionFlagsBits.BanMembers)) return sendError('ليس لديك صلاحية لاستخدام هذا الأمر!');
+    const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
+    if (!target) return sendError('اكتب: `+باند @العضو [السبب]`');
     const reason = args.slice(1).join(' ') || 'بدون سبب';
     try {
       await target.ban({ reason });
-      await message.reply(`🔨 **تم حظر العضو ${target.user.tag}.**`);
+      await message.reply(`🔨 **تم تبنيد العضو ${target.user.tag} بنجاح. السبب: ${reason}**`);
     } catch (e) {
-      sendError('حدث خطأ.');
+      sendError('لا يمكنني تبنيد هذا العضو!');
     }
   }
 
-  if (command === 'برا') {
-    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة فقط!');
-    const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]?.replace(/[<@!>]/g, ''));
-    if (!target) return sendError('اكتب: `+برا @العضو [السبب]`');
-    if (!target.kickable || target.roles.highest.position >= message.member.roles.highest.position) return sendError('لا يمكنني طرد هذا العضو!');
+  // --- أمر الـ Kick ---
+  if (command === 'kick') {
+    if (!isOwner && !message.member.permissions.has(PermissionFlagsBits.KickMembers)) return sendError('ليس لديك صلاحية لاستخدام هذا الأمر!');
+    const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
+    if (!target) return sendError('اكتب: `+kick @العضو [السبب]`');
     const reason = args.slice(1).join(' ') || 'بدون سبب';
     try {
       await target.kick(reason);
-      await message.reply(`👢 **تم طرد العضو ${target.user.tag}.**`);
+      await message.reply(`👢 **تم طرد العضو ${target.user.tag} بنجاح. السبب: ${reason}**`);
     } catch (e) {
-      sendError('حدث خطأ.');
+      sendError('لا يمكنني طرد هذا العضو!');
     }
   }
 
-  if (command === 'مسح' || command === 'كلير') {
-    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة فقط!');
-    const count = parseInt(args[0]);
-    if (isNaN(count) || count <= 0 || count > 100) return sendError('اكتب عدد بين 1 و 100: `+مسح 50`');
+  // --- أمر إخفاء الروم ---
+  if (command === 'اخفاء') {
+    if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
+    try {
+      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: false });
+      await message.reply('🙈 **تم إخفاء الروم بنجاح.**');
+    } catch (e) {
+      sendError('فشل إخفاء الروم.');
+    }
+  }
+
+  // --- أمر ظهور الروم ---
+  if (command === 'ظهور' || command === 'اظهار') {
+    if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
+    try {
+      await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: true });
+      await message.reply('🐵 **تم إظهار الروم بنجاح.**');
+    } catch (e) {
+      sendError('فشل إظهار الروم.');
+    }
+  }
+
+  // --- أمر إعطاء الرول ---
+  if (command === 'رول') {
+    if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
+    const targetMember = message.mentions.members.first();
+    const roleArg = args.slice(1).join(' ').replace(/[<@&>]/g, '');
+    const role = message.guild.roles.cache.get(roleArg) || message.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleArg.toLowerCase()));
+    if (!targetMember || !role) return sendError('اكتب بشكل صحيح: `+رول @العضو اسم_الرول`');
+
+    try {
+      await targetMember.roles.add(role);
+      await message.reply(`✅ **تم إعطاء رول (${role.name}) للعضو ${targetMember}.**`);
+    } catch (e) {
+      sendError('رتبة البوت أدنى من الرتبة المراد إعطاؤها!');
+    }
+  }
+
+  // --- أمر شيل الرول ---
+  if (command === 'شيل') {
+    if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
+    const targetMember = message.mentions.members.first();
+    const roleArg = args.slice(1).join(' ').replace(/[<@&>]/g, '');
+    const role = message.guild.roles.cache.get(roleArg) || message.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleArg.toLowerCase()));
+    if (!targetMember || !role) return sendError('اكتب بشكل صحيح: `+شيل @العضو اسم_الرول`');
+
+    try {
+      await targetMember.roles.remove(role);
+      await message.reply(`🗑️ **تم إزالة رول (${role.name}) من العضو ${targetMember}.**`);
+    } catch (e) {
+      sendError('رتبة البوت أدنى من الرتبة المراد إزالتها!');
+    }
+  }
+
+  // --- أمر ألعاب عشوائية ---
+  if (command === 'العاب' || command === 'لعبة') {
+    const games = [
+      '🎮 لعبة صراحة: لو خيروك بين العيش بدون إنترنت أو بدون أصدقاء، ماذا تختار؟',
+      '🎮 لعبة تحدي: قم بتقليد صوت قطة بأعلى صوت لديك الآن!',
+      '🎮 لعبة فكاهية: ما هو أغبى موقف حصل معك وأنت صغير؟',
+      '🎮 لعبة ذكاء: ما هو الشيء الذي كلما أخذت منه كبر؟ (الحفرة)',
+      '🎮 لعبة عشوائية: من هو الشخص الأكثر نشاطاً في سيرفرنا اليوم برأيك؟'
+    ];
+    const randomGame = games[Math.floor(Math.random() * games.length)];
+    return message.reply(randomGame);
+  }
+
+  // --- أمر AFK ---
+  if (command === 'afk') {
+    const reason = args.join(' ') || 'بدون سبب مشخص';
+    afkUsers.set(message.author.id, { reason });
+    return message.reply(`💤 **تم تفعيل وضع الـ AFK بنجاح!**\n📝 السبب: **${reason}**\n*(سيتم الرد تلقائياً على كل من يمنشنك)*`).then(msg => {
+      setTimeout(() => msg.delete().catch(() => {}), 5000);
+    });
+  }
+
+  // --- أمر الستريك (Streak) ---
+  if (command === 'ستريك') {
+    return message.reply(`🔥 **لديك ستريك متواصل بعدد:** \`${userStreak.count}\` **يوم! حافظ على استمرارك.**`);
+  }
+
+  // --- أمر الاستدعاء ---
+  if (command === 'استدعاء') {
+    const target = message.mentions.members.first();
+    if (!target) return sendError('اكتب: `+استدعاء @العضو [السبب]`');
+    const reason = args.slice(1).join(' ') || 'لا يوجد سبب محدد';
+    try {
+      await target.send(`🚨 **تم استدعاؤك في سيرفر (${message.guild.name}) بواسطة ${message.author}**\n📌 **السبب:** ${reason}\n📍 **الروم:** ${message.channel}`).catch(() => {});
+      await message.reply(`✅ **تم إرسال تنبيه الاستدعاء إلى العضو ${target} بنجاح.**`);
+    } catch (e) {
+      sendError('تعذر إرسال رسالة خاصة للعضو.');
+    }
+  }
+
+  // --- أمر مسح الرسائل (+مسح أو مسح) ---
+  if (command === 'مسح') {
+    if (!isOwner && !message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return sendError('ليس لديك صلاحية مسح الرسائل!');
+    const count = parseInt(args[0]) || 10;
+    if (count <= 0 || count > 100) return sendError('يرجى كتابة عدد بين 1 و 100.');
     try {
       await message.channel.bulkDelete(count + 1, true);
-      const tempMsg = await message.channel.send(`🧹 تم مسح \`${count}\` رسالة.`);
+      const tempMsg = await message.channel.send(`🧹 **تم مسح \`${count}\` رسالة بنجاح.**`);
       setTimeout(() => tempMsg.delete().catch(() => {}), 3000);
     } catch (e) {
       sendError('لا يمكنني مسح الرسائل الأقدم من 14 يوماً.');
     }
   }
 
-  if (command === 'جيفواي') {
-    if (!isOwner) return sendError('هذا الأمر مخصص للأونرية ورتب الإدارة فقط!');
+  // --- أمر الجيفواي العادي (بدون سلاش، تنمسح رسالة البوت وتبقى الجيفواي) ---
+  if (command === 'جيفوايات' || command === 'جيفواي') {
+    if (!isOwner) return sendError('هذا الأمر مخصص للإدارة والأونرية فقط!');
+    
+    // الصيغة: +جيفوايات الوقت(بالدقائق) الجائزة
     const timeMinutes = parseInt(args[0]);
     const prize = args.slice(1).join(' ');
+    
+    // حذف رسالة الأمر الأصلية فوراً
     await message.delete().catch(() => {});
-    if (isNaN(timeMinutes) || timeMinutes <= 0 || !prize) return message.channel.send('❌ اكتب هكذا: `+جيفواي 5 1000 روبكس`');
+    
+    if (isNaN(timeMinutes) || timeMinutes <= 0 || !prize) {
+      return message.channel.send('❌ **خطأ في الصيغة!** اكتب هكذا: `+جيفوايات 5 1000 روبكس`').then(m => setTimeout(() => m.delete().catch(() => {}), 5000));
+    }
 
     const embed = new EmbedBuilder()
       .setTitle('🎉 مسابقة جيفواي جديدة')
-      .setDescription(`🎁 الجائزة: **${prize}**\n⏱️ الوقت: **${timeMinutes} دقائق**\n\nاضغط الزر للمشاركة!`)
-      .setColor(0xF1C40F);
+      .setDescription(`🎁 الجائزة: **${prize}**\n⏱️ الوقت المحدد: **${timeMinutes} دقائق**\n\nاضغط على الزر بالأسفل للمشاركة!`)
+      .setColor(0xF1C40F)
+      .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('join_gw').setLabel('🎉 اشترك').setStyle(ButtonStyle.Success)
+      new ButtonBuilder().setCustomId('join_gw').setLabel('🎉 اشترك بالسحب').setStyle(ButtonStyle.Success)
     );
 
     const giveawayMsg = await message.channel.send({ embeds: [embed], components: [row] });
@@ -231,34 +333,140 @@ client.on('messageCreate', async message => {
     const collector = giveawayMsg.createMessageComponentCollector({ time: timeMinutes * 60 * 1000 });
 
     collector.on('collect', async i => {
-      if (entrants.has(i.user.id)) return i.reply({ content: '⚠️ أنت مشارك مسبقاً!', ephemeral: true });
+      if (entrants.has(i.user.id)) return i.reply({ content: '⚠️ أنت مشارك مسبقاً في هذه المسابقة!', ephemeral: true });
       entrants.add(i.user.id);
-      await i.reply({ content: '✅ تم تسجيل اسمك بالسحب!', ephemeral: true });
+      await i.reply({ content: '✅ **تم تسجيل اسمك بنجاح في السحب!**', ephemeral: true });
     });
 
     collector.on('end', async () => {
-      if (entrants.size === 0) return giveawayMsg.edit({ embeds: [embed.setDescription(`🎁 الجائزة: **${prize}**\n❌ **انتهت المسابقة ولم يشارك أحد!**`).setColor(0xE74C3C)], components: [] }).catch(() => {});
+      if (entrants.size === 0) {
+        return giveawayMsg.edit({ embeds: [embed.setDescription(`🎁 الجائزة: **${prize}**\n❌ **انتهت المسابقة ولم يشارك أي أحد!**`).setColor(0xE74C3C)], components: [] }).catch(() => {});
+      }
       const entrantsArray = Array.from(entrants);
       const winnerId = entrantsArray[Math.floor(Math.random() * entrantsArray.length)];
-      const winner = await message.guild.members.fetch(winnerId).catch(() => null);
-
+      
       const endEmbed = new EmbedBuilder()
         .setTitle('🎊 انتهت المسابقة وتحدد الفائز!')
-        .setDescription(`🎁 الجائزة: **${prize}**\n👑 الفائز: ${winner ? winner : '<@' + winnerId + '>'}`)
+        .setDescription(`🎁 الجائزة: **${prize}**\n👑 الفائز المحظوظ: <@${winnerId}>`)
         .setColor(0x2ECC71);
 
       await giveawayMsg.edit({ embeds: [endEmbed], components: [] }).catch(() => {});
-      await message.channel.send(`🎉 مبروك لـ ${winner ? winner : '<@' + winnerId + '>'} فزت بـ **${prize}**!`).catch(() => {});
+      await message.channel.send(`🎉 **مبروك لـ <@${winnerId}> فزت بـ (${prize})!**`).catch(() => {});
     });
   }
 
-  if (command === 'بينج') {
-    const msg = await message.reply('🏓 جاري القياس...');
-    const ping = msg.createdTimestamp - message.createdTimestamp;
-    await msg.edit(`🏓 **البينج:** \`${ping}ms\` ⚡`);
+  // --- أمر الامبيد (+امبيد) ---
+  if (command === 'امبيد') {
+    if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
+    const contentText = args.join(' ');
+    if (!contentText) return sendError('اكتب النص الذي تريده بعد الأمر: `+امبيد [الكلام]`');
+    
+    await message.delete().catch(() => {});
+    const customEmbed = new EmbedBuilder()
+      .setDescription(contentText)
+      .setColor(0x3498DB)
+      .setTimestamp();
+
+    return message.channel.send({ embeds: [customEmbed] });
+  }
+
+  // --- أمر Say (يكرر البوت كلامك وتمسح رسالتك) ---
+  if (command === 'say') {
+    if (!isOwner) return sendError('هذا الأمر مخصص للإدارة فقط!');
+    const sayText = args.join(' ');
+    if (!sayText) return sendError('اكتب النص الذي تريد من البوت قوله.');
+    
+    await message.delete().catch(() => {});
+    return message.channel.send(sayText);
+  }
+
+  // --- أمر التايم آوت (+تايم) ---
+  if (command === 'تايم' || command === 'timeout') {
+    if (!isOwner && !message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) return sendError('ليس لديك صلاحية لإعطاء تايم آوت!');
+    const target = message.mentions.members.first();
+    const timeArg = args[1]; // مثل 1d, 2h, 30m
+    if (!target || !timeArg) return sendError('اكتب هكذا: `+تايم @العضو 1h [السبب]`');
+
+    let duration = 0;
+    const value = parseInt(timeArg);
+    const unit = timeArg.slice(-1).toLowerCase();
+
+    if (unit === 'd') duration = value * 24 * 60 * 60 * 1000;
+    else if (unit === 'h') duration = value * 60 * 60 * 1000;
+    else if (unit === 'm') duration = value * 60 * 1000;
+    else return sendError('وحدة الوقت خطأ! استخدم: `d` (يوم) أو `h` (ساعة) أو `m` (دقيقة). مثال: `1h`');
+
+    const reason = args.slice(2).join(' ') || 'بدون سبب';
+    try {
+      await target.timeout(duration, reason);
+      await message.reply(`⏳ **تم إعطاء تايم آوت للعضو ${target} لمدة (${timeArg}). السبب: ${reason}**`);
+    } catch (e) {
+      sendError('لا يمكنني إعطاء تايم آوت لهذا العضو!');
+    }
+  }
+
+  // --- أمر فك التايم (+انتايم) ---
+  if (command === 'انتايم' || command === 'untimeout') {
+    if (!isOwner && !message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) return sendError('ليس لديك صلاحية لفك التايم!');
+    const target = message.mentions.members.first();
+    if (!target) return sendError('اكتب: `+انتايم @العضو`');
+    try {
+      await target.timeout(null);
+      await message.reply(`🔓 **تم فك التايم آوت عن العضو ${target} بنجاح.**`);
+    } catch (e) {
+      sendError('فشل فك التايم عن هذا العضو.');
+    }
+  }
+
+  // --- أمر رول جماعي (+رول-جماعي) ---
+  if (command === 'رول-جماعي' || command === 'اعطاء-رول-للكل') {
+    if (!isOwner) return sendError('هذا الأمر مخصص لأونر السيرفر فقط!');
+    const roleArg = args.join(' ').replace(/[<@&>]/g, '');
+    const role = message.guild.roles.cache.get(roleArg) || message.guild.roles.cache.find(r => r.name.toLowerCase().includes(roleArg.toLowerCase()));
+    if (!role) return sendError('اكتب اسم الرول أو الآيدي بشكل صحيح: `+رول-جماعي اسم_الرول`');
+
+    await message.reply('⏳ **جاري إعطاء الرول لجميع أعضاء السيرفر، قد يستغرق ذلك بعض الوقت...**');
+    
+    try {
+      await message.guild.members.fetch();
+      let count = 0;
+      message.guild.members.cache.forEach(async member => {
+        if (!member.user.bot && !member.roles.cache.has(role.id)) {
+          await member.roles.add(role).catch(() => {});
+          count++;
+        }
+      });
+      await message.channel.send(`✅ **تم الانتهاء! تمت إضافة الرول (${role.name}) لـ (${count}) عضو بنجاح.**`);
+    } catch (e) {
+      sendError('حدث خطأ أثناء إعطاء الرولات للكل.');
+    }
+  }
+
+  // --- أوامر التكت (+close و +delete) ---
+  if (command === 'close') {
+    const isSupport = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
+    if (!isSupport) return message.reply('❌ **هذا الأمر مخصص للدعم الفني والأونرية فقط!**').catch(() => {});
+    
+    await message.channel.send('🔒 **جاري إغلاق التكت...**').catch(() => {});
+    setTimeout(() => {
+      message.channel.delete().catch(() => {});
+    }, 2000);
+    return;
+  }
+
+  if (command === 'delete') {
+    const isSupport = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
+    if (!isSupport) return message.reply('❌ **هذا الأمر مخصص للدعم الفني والأونرية فقط!**').catch(() => {});
+
+    await message.channel.send('🗑️ **جاري حذف التكت نهائياً...**').catch(() => {});
+    setTimeout(() => {
+      message.channel.delete().catch(() => {});
+    }, 2000);
+    return;
   }
 });
 
+// نظام الأزرار الخاص بالتذاكر والـ Help
 client.on('interactionCreate', async interaction => {
   if (interaction.isButton()) {
     if (interaction.customId === 'create_ticket') {
@@ -275,28 +483,16 @@ client.on('interactionCreate', async interaction => {
           name: `ticket-${member.user.username}`,
           type: ChannelType.GuildText,
           permissionOverwrites: [
-            {
-              id: guild.id,
-              deny: [PermissionFlagsBits.ViewChannel],
-            },
-            {
-              id: member.id,
-              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
-            },
-            {
-              id: SUPPORT_ROLE_ID,
-              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
-            },
-            ...OWNER_ROLES.map(roleId => ({
-              id: roleId,
-              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
-            }))
+            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+            { id: member.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            { id: SUPPORT_ROLE_ID, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            ...OWNER_ROLES.map(roleId => ({ id: roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
           ],
         });
 
         const ticketEmbed = new EmbedBuilder()
           .setTitle('🎫 تكت جديدة')
-          .setDescription(`أهلاً بك ${member}\nيرجى اختيار طريقة الدفع أو نوع الطلب من الأزرار بالأسفل ليتم خدمتتكم في أقرب وقت.`)
+          .setDescription(`أهلاً بك ${member}\nيرجى اختيار طريقة الدفع أو نوع الطلب من الأزرار بالأسفل ليتم خدمتكم في أقرب وقت.`)
           .setColor(0x3498DB)
           .setTimestamp();
 
@@ -329,7 +525,7 @@ client.on('interactionCreate', async interaction => {
         .setCustomId('order_details')
         .setLabel('تفاصيل الطلب الخاص بك')
         .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('اكتب ما تريد بضبط هنا...')
+        .setPlaceholder('اكتب ما تريد بالضبط هنا...')
         .setRequired(true);
 
       modal.addComponents(new ActionRowBuilder().addComponents(methodInput), new ActionRowBuilder().addComponents(detailsInput));
@@ -340,7 +536,7 @@ client.on('interactionCreate', async interaction => {
       const isSupport = interaction.member.permissions.has(PermissionFlagsBits.Administrator) || interaction.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
       if (!isSupport) return interaction.reply({ content: '❌ هذا الزر مخصص للدعم الفني فقط!', ephemeral: true });
 
-      // منع صاحب التكت من استلام التكت الخاص به إذا ضغط عليه بالخطأ
+      // منع صاحب التكت من استلام التكت الخاصة به
       const ticketCreator = interaction.channel.name.replace('ticket-', '');
       if (interaction.user.username.toLowerCase() === ticketCreator.toLowerCase()) {
         return interaction.reply({ content: '❌ لا يمكنك استلام التكت الخاصة بك!', ephemeral: true });
