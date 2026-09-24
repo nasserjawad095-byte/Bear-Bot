@@ -47,6 +47,29 @@ client.once('ready', async () => {
 
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
+
+  if (message.content.startsWith('+close')) {
+    const isSupport = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
+    if (!isSupport) return message.reply('❌ هذا الأمر مخصص للدعم الفني والأونرية فقط!').catch(() => {});
+    
+    await message.channel.send('🔒 جاري إغلاق التكت...').catch(() => {});
+    setTimeout(() => {
+      message.channel.delete().catch(() => {});
+    }, 2000);
+    return;
+  }
+
+  if (message.content.startsWith('+delete')) {
+    const isSupport = message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
+    if (!isSupport) return message.reply('❌ هذا الأمر مخصص للدعم الفني والأونرية فقط!').catch(() => {});
+
+    await message.channel.send('🗑️ جاري حذف التكت نهائياً...').catch(() => {});
+    setTimeout(() => {
+      message.channel.delete().catch(() => {});
+    }, 2000);
+    return;
+  }
+
   if (!message.content.startsWith('+')) return;
 
   const args = message.content.slice(1).trim().split(/ +/);
@@ -66,7 +89,7 @@ client.on('messageCreate', async message => {
         },
         {
           name: '👑 **أوامر الأونرية والإدارة:**',
-          value: '`+قفل` - لقفل الشات\n`+فتح` - لفتح الشات\n`+اخفاء` - لإخفاء الروم\n`+اظهار` - لإظهار الروم\n`+رول @العضو اسم_الرول` - لإعطاء رتبة\n`+شيل @العضو اسم_الرول` - لسحب رتبة\n`+تف @العضو [السبب]` - حظر عضو\n`+برا @العضو [السبب]` - طرد عضو\n`+مسح [العدد]` - مسح الرسائل\n`+جيفواي [الدقائق] [الجائزة]` - مسابقة جيفواي'
+          value: '`+قفل` - لقفل الشات\n`+فتح` - لفتح الشات\n`+اخفاء` - لإخفاء الروم\n`+اظهار` - لإظهار الروم\n`+رول @العضو اسم_الرول` - لإعطاء رتبة\n`+شيل @العضو اسم_الرول` - لسحب رتبة\n`+تف @العضو [السبب]` - حظر عضو\n`+برا @العضو [السبب]` - طرد عضو\n`+مسح [العدد]` - مسح الرسائل\n`+جيفواي [الدقائق] [الجائزة]` - مسابقة جيفواي\n`+close` - إغلاق التكت (داخل التكت)\n`+delete` - حذف التكت (داخل التكت)'
         }
       )
       .setTimestamp();
@@ -317,6 +340,12 @@ client.on('interactionCreate', async interaction => {
       const isSupport = interaction.member.permissions.has(PermissionFlagsBits.Administrator) || interaction.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
       if (!isSupport) return interaction.reply({ content: '❌ هذا الزر مخصص للدعم الفني فقط!', ephemeral: true });
 
+      // منع صاحب التكت من استلام التكت الخاص به إذا ضغط عليه بالخطأ
+      const ticketCreator = interaction.channel.name.replace('ticket-', '');
+      if (interaction.user.username.toLowerCase() === ticketCreator.toLowerCase()) {
+        return interaction.reply({ content: '❌ لا يمكنك استلام التكت الخاصة بك!', ephemeral: true });
+      }
+
       const embed = EmbedBuilder.from(interaction.message.embeds[0]).addFields({ name: 'تم الاستلام بواسطة', value: `${interaction.user}`, inline: false });
       const disabledRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('pay_method').setLabel('طريقة الدفع (بنكي / adamc)').setStyle(ButtonStyle.Secondary).setEmoji('💳'),
@@ -329,6 +358,14 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (interaction.customId === 'close_ticket') {
+      const isSupport = interaction.member.permissions.has(PermissionFlagsBits.Administrator) || interaction.member.roles.cache.some(r => OWNER_ROLES.includes(r.id) || r.id === SUPPORT_ROLE_ID);
+      const ticketCreator = interaction.channel.name.replace('ticket-', '');
+      const isCreator = interaction.user.username.toLowerCase() === ticketCreator.toLowerCase();
+
+      if (!isSupport && !isCreator) {
+        return interaction.reply({ content: '❌ ليس لديك صلاحية لإغلاق هذا التكت!', ephemeral: true });
+      }
+
       await interaction.reply('🔒 جاري حذف التكت وإغلاقه خلال ثوانٍ...');
       setTimeout(() => {
         interaction.channel.delete().catch(() => {});
